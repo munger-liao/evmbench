@@ -4,9 +4,9 @@
     </picture>
 </p>
 
-<a href="#how-it-works"><b><u>How it works</u></b></a> | <a href="#security"><b><u>Security</u></b></a> | <a href="#key-services"><b><u>Key services</u></b></a> | <a href="#repo-layout"><b><u>Repo layout</u></b></a> | <a href="#quickstart-local-dev"><b><u>Quickstart (local dev)</u></b></a>
-
 **evmbench is a benchmark and agent harness for finding and exploiting smart contract bugs.**
+
+<a href="#how-it-works"><b><u>How it works</u></b></a> | <a href="#security"><b><u>Security</u></b></a> | <a href="#key-services"><b><u>Key services</u></b></a> | <a href="#repo-layout"><b><u>Repo layout</u></b></a> | <a href="#quickstart-local-dev"><b><u>Quickstart (local dev)</u></b></a>
 
 This repository contains a companion interface to the `evmbench` detect evaluation ([code](https://github.com/openai/frontier-evals)).
 
