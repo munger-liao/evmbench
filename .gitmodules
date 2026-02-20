@@ -1,0 +1,3 @@
+[submodule "frontier-evals"]
+	path = frontier-evals
+	url = https://github.com/openai/frontier-evals.git
