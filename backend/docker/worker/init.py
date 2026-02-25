@@ -162,17 +162,10 @@ def _extract_json_payload(audit_md: str) -> dict:
 
 def _run_codex_detect(*, openai_token: str, key_mode: str) -> Path:
     env = os.environ.copy()
-    env['OPENAI_API_KEY'] = openai_token
-    # Codex CLI supports using CODEX_API_KEY; keep it aligned to avoid surprises.
-    env['CODEX_API_KEY'] = openai_token
     env['HOME'] = str(AGENT_DIR)
     env['AGENT_DIR'] = str(AGENT_DIR)
     env['SUBMISSION_DIR'] = str(SUBMISSION_DIR)
     env['LOGS_DIR'] = str(LOGS_DIR)
-
-    # Proxy-token mode: write Codex config to route requests through oai_proxy.
-    if key_mode in {'proxy', 'proxy_static'}:
-        _write_codex_proxy_config(home=AGENT_DIR)
 
     if not DETECT_MD_PATH.exists():
         msg = f'Missing detect instructions: {DETECT_MD_PATH}'
@@ -184,6 +177,18 @@ def _run_codex_detect(*, openai_token: str, key_mode: str) -> Path:
     model_map = _load_model_map()
     model = _resolve_codex_model(model_key=MODEL_KEY, model_map=model_map)
     env['CODEX_MODEL'] = model
+
+    # Proxy-token mode: write Codex config to route requests through oai_proxy.
+    # Encode real model name in API key so oai_proxy can substitute it.
+    if key_mode in {'proxy', 'proxy_static'}:
+        _write_codex_proxy_config(home=AGENT_DIR)
+        # Append real model to token: "TOKEN:real_model"
+        if MODEL_KEY:
+            openai_token = f'{openai_token}::{MODEL_KEY}'
+
+    env['OPENAI_API_KEY'] = openai_token
+    # Codex CLI supports using CODEX_API_KEY; keep it aligned to avoid surprises.
+    env['CODEX_API_KEY'] = openai_token
     env['EVM_BENCH_DETECT_MD'] = str(DETECT_MD_PATH)
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)

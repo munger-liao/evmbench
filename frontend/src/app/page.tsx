@@ -49,7 +49,7 @@ export default function Page() {
     clearUpload,
   } = useUploadStore()
   const [openaiKey, setOpenaiKey] = useSessionStorage("evmbench.openaiKey", "")
-  const [model, setModel] = useState("gpt-5.2")
+  const [model, setModel] = useState("claude-opus-4-5")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [recentJobs, setRecentJobs] = useLocalStorage<RecentJob[]>(
@@ -284,8 +284,9 @@ export default function Page() {
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-5.2">gpt-5.2</SelectItem>
-                      <SelectItem value="gpt-5.1">gpt-5.1</SelectItem>
+                      <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
+                      <SelectItem value="gpt-5.2">GPT-5.2</SelectItem>
+                      <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

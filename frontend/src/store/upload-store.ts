@@ -16,10 +16,10 @@ interface UploadState {
 }
 
 export const useUploadStore = create<UploadState>((set) => ({
-  mode: "files",
+  mode: "github",
   files: null,
   packageName: null,
-  githubUrl: "",
+  githubUrl: "https://github.com/paulrberg/prb-math",
   fromGitHub: false,
   setMode: (mode) => set({ mode }),
   setUpload: (files, packageName) => set({ files, packageName }),

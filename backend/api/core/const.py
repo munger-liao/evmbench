@@ -1,7 +1,6 @@
 ALLOWED_MODELS = {
-    'codex-gpt-5.1-codex-max',
-    'codex-gpt-5.2',
-    # Direct LiteLLM model names (bypass worker model_map)
-    'gpt-5.1',
+    # LiteLLM model names
     'gpt-5.2',
+    'claude-opus-4-5',
+    'gemini-3-flash-preview',
 }
