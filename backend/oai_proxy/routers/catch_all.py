@@ -10,8 +10,6 @@ from starlette.responses import StreamingResponse
 from api.util.aes_gcm import decrypt_token, derive_key
 from oai_proxy.core.config import settings
 
-
-OPENAI_BASE_URL = 'https://api.openai.com'
 # Marker token that triggers use of the static key
 STATIC_KEY_MARKER = 'STATIC'
 HOP_BY_HOP_HEADERS = {
@@ -34,7 +32,6 @@ def _aesgcm_key() -> bytes:
     return derive_key(settings.OAI_PROXY_AES_KEY.get_secret_value())
 
 
-@lru_cache(maxsize=1)
 def _get_static_key() -> str | None:
     if settings.OAI_PROXY_STATIC_KEY:
         return settings.OAI_PROXY_STATIC_KEY.get_secret_value()
@@ -95,7 +92,8 @@ async def _proxy_request(request: Request, path: str) -> StreamingResponse:
 
     target_path = path.lstrip('/')
     encoded_path = quote(target_path, safe='/')
-    target_url = f'{OPENAI_BASE_URL}/{encoded_path}' if encoded_path else OPENAI_BASE_URL
+    base_url = settings.OAI_PROXY_OPENAI_BASE_URL.rstrip('/')
+    target_url = f'{base_url}/{encoded_path}' if encoded_path else base_url
 
     body = request.stream()
     params = request.query_params

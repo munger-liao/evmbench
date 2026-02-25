@@ -77,6 +77,24 @@ class StartJobForm(BaseModel):
         return value
 
 
+class StartJobFromGitHubForm(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    github_url: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    model: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+    openai_key: Annotated[str | None, StringConstraints(strip_whitespace=True, min_length=1)] = None
+
+    @model_validator(mode='after')
+    def require_openai_key(self) -> 'StartJobFromGitHubForm':
+        # Skip validation if using proxy's static key or backend's static key
+        if settings.BACKEND_USE_PROXY_STATIC_KEY:
+            return self
+        if settings.BACKEND_STATIC_OAI_KEY is None and not self.openai_key:
+            msg = 'openai_key is required'
+            raise ValueError(msg)
+        return self
+
+
 class PatchJobForm(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

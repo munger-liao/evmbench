@@ -93,11 +93,11 @@ services:
       - .env
     environment:
       OAI_PROXY_HOST: 0.0.0.0
-      OAI_PROXY_PORT: 8084
+      OAI_PROXY_PORT: ${OAI_PROXY_PORT:-8085}
       # Required only when running with profile "proxy"
       OAI_PROXY_AES_KEY: ${OAI_PROXY_AES_KEY:-}
     ports:
-      - "127.0.0.1:8084:8084"
+      - "127.0.0.1:${OAI_PROXY_PORT:-8085}:${OAI_PROXY_PORT:-8085}"
     networks:
       shared_network:
         aliases:

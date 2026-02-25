@@ -1,7 +1,10 @@
+export type JobSource = "files" | "github"
+
 export interface RecentJob {
   job_id: string
   label: string
   created_at_ms: number
+  source?: JobSource
 }
 
 const STORAGE_KEY = "evmbench.recentJobs.v1"
@@ -23,7 +26,8 @@ function safeParseRecentJobs(raw: string | null): RecentJob[] {
       if (typeof label !== "string" || !label) continue
       if (typeof created_at_ms !== "number" || !Number.isFinite(created_at_ms))
         continue
-      jobs.push({ job_id, label, created_at_ms })
+      const source = obj.source === "github" ? "github" : obj.source === "files" ? "files" : undefined
+      jobs.push({ job_id, label, created_at_ms, source })
     }
     return jobs
   } catch {
@@ -47,6 +51,19 @@ export function addRecentJob(job: RecentJob) {
     0,
     MAX_RECENT,
   )
+  setRecentJobs(next)
+  return next
+}
+
+export function getJobSource(jobId: string): JobSource | undefined {
+  const jobs = getRecentJobs()
+  const job = jobs.find((j) => j.job_id === jobId)
+  return job?.source
+}
+
+export function removeRecentJob(jobId: string): RecentJob[] {
+  const existing = getRecentJobs()
+  const next = existing.filter((j) => j.job_id !== jobId)
   setRecentJobs(next)
   return next
 }

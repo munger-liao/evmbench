@@ -34,6 +34,7 @@ interface TabletResultsViewProps {
   codeAnnotations: CodeAnnotation[]
   scrollToLine?: number | null
   scrollToVulnerabilityId?: string | null
+  jobId?: string | null
 }
 
 export function TabletResultsView({
@@ -45,6 +46,7 @@ export function TabletResultsView({
   codeAnnotations,
   scrollToLine,
   scrollToVulnerabilityId,
+  jobId,
 }: TabletResultsViewProps) {
   const [codeSheetOpen, setCodeSheetOpen] = useState(false)
   const [codeSheetFile, setCodeSheetFile] = useState<string | null>(null)
@@ -68,6 +70,7 @@ export function TabletResultsView({
             selectedVulnerability={selectedVulnerability}
             onSelectVulnerability={onSelectVulnerability}
             scrollToVulnerabilityId={scrollToVulnerabilityId}
+            jobId={jobId}
           />
         </ResizablePanel>
         <ResizableHandle />

@@ -115,6 +115,32 @@ export async function startJob(
   return response.json()
 }
 
+export async function startJobFromGitHub(
+  githubUrl: string,
+  model: string,
+  openaiKey: string,
+): Promise<StartJobResponse> {
+  const response = await fetch(`${API_BASE}/v1/jobs/start-from-github`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      github_url: githubUrl,
+      model,
+      openai_key: openaiKey || undefined,
+    }),
+    credentials: "include",
+  })
+
+  if (!response.ok) {
+    const message = await readApiError(response)
+    throw new Error(message ?? `Failed to start job (${response.status})`)
+  }
+
+  return response.json()
+}
+
 export async function fetchJobHistory(
   signal?: AbortSignal,
 ): Promise<JobHistoryItem[]> {

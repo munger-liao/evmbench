@@ -378,7 +378,9 @@ export default function ResultsClient() {
     isRunComplete,
   ])
 
-  const shouldGateResults = isRunComplete && !files
+  // Don't gate results - show vulnerability list even without local files
+  // Users can optionally upload files to view code
+  const shouldGateResults = false
   const statusError = jobError || job?.error
 
   return (
@@ -424,6 +426,7 @@ export default function ResultsClient() {
           selectedNode={selectedNode}
           codeAnnotations={codeAnnotations}
           scrollToLine={scrollToLine}
+          jobId={jobId}
         />
       ) : isNarrowViewport ? (
         <TabletResultsView
@@ -435,6 +438,7 @@ export default function ResultsClient() {
           codeAnnotations={codeAnnotations}
           scrollToLine={scrollToLine}
           scrollToVulnerabilityId={scrollToVulnerabilityId}
+          jobId={jobId}
         />
       ) : (
         <ResizablePanelGroup
@@ -497,6 +501,7 @@ export default function ResultsClient() {
                   selectedVulnerability={selectedVulnerability}
                   onSelectVulnerability={handleSelectVulnerability}
                   scrollToVulnerabilityId={scrollToVulnerabilityId}
+                  jobId={jobId}
                 />
               </ResizablePanel>
             </ResizablePanelGroup>

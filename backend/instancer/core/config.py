@@ -83,6 +83,11 @@ class Settings(BaseSettings):
         default=None,
         validation_alias=AliasChoices('INSTANCER_OAI_PROXY_BASE_URL', 'OAI_PROXY_BASE_URL'),
     )
+    # Wire API format for Codex: 'responses' (OpenAI Responses API) or 'chat' (Chat Completions API)
+    INSTANCER_OAI_PROXY_WIRE_API: str = Field(
+        default='responses',
+        validation_alias=AliasChoices('INSTANCER_OAI_PROXY_WIRE_API', 'OAI_PROXY_WIRE_API'),
+    )
 
     @field_validator('INSTANCER_OAI_PROXY_BASE_URL', mode='before')
     @classmethod

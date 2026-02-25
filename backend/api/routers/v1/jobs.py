@@ -15,10 +15,12 @@ from api.core.deps import OptionalTokenDep, TokenDep, get_db
 from api.core.impl import auth_backend
 from api.core.rabbitmq import RabbitMQPublisher, get_rabbitmq_publisher
 from api.models.job import Job, JobStatus
-from api.schemas.job import JobHistoryItem, JobStatusResponse, PatchJobForm, StartJobForm, StartJobResponse
+from api.schemas.job import JobHistoryItem, JobStatusResponse, PatchJobForm, StartJobForm, StartJobFromGitHubForm, StartJobResponse
 from api.secrets.impl import secret_storage
 from api.util.aes_gcm import derive_key, encrypt_token
-from api.util.secrets_bundle import build_secret_bundle
+from api.util.github_download import GitHubDownloadError, download_github_repo
+from api.util.secrets_bundle import build_secret_bundle, build_secret_bundle_from_bytes
+from api.util.zip_validate import ZipValidationError, validate_zip_bytes
 
 
 router = APIRouter(prefix='/jobs', tags=['jobs'])
@@ -187,6 +189,99 @@ async def start_job(
         return StartJobResponse(job_id=job_id, status=job.status)
     finally:
         await form.file.close()
+
+
+def _resolve_openai_key_from_github_form(form: StartJobFromGitHubForm) -> str | None:
+    """Determine which OpenAI key to use for GitHub form submissions."""
+    static_key = settings.BACKEND_STATIC_OAI_KEY.get_secret_value() if settings.BACKEND_STATIC_OAI_KEY else None
+    return static_key or form.openai_key
+
+
+@router.post('/start-from-github')
+async def start_job_from_github(
+    form: StartJobFromGitHubForm,
+    session: DbSessionDep,
+    publisher: PublisherDep,
+    token: TokenDep,
+) -> StartJobResponse:
+    await _require_no_active_job(session=session, user_id=token.user_id)
+    _require_allowed_model(form.model)
+
+    use_proxy_static = settings.BACKEND_USE_PROXY_STATIC_KEY
+    use_proxy_tokens = settings.BACKEND_OAI_KEY_MODE == 'proxy'
+    openai_key = _resolve_openai_key_from_github_form(form)
+
+    if not use_proxy_static and not openai_key:
+        raise HTTPException(status_code=412, detail='openai_key is required')
+
+    # Download the repository from GitHub
+    try:
+        zip_bytes, filename = await download_github_repo(form.github_url)
+    except GitHubDownloadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Validate the downloaded zip
+    try:
+        validate_zip_bytes(
+            zip_bytes,
+            max_uncompressed_bytes=settings.BACKEND_MAX_ATTACHMENT_UNCOMPRESSED_BYTES,
+            max_files=settings.BACKEND_ZIP_MAX_FILES,
+            max_ratio=settings.BACKEND_ZIP_MAX_COMPRESSION_RATIO,
+            require_solidity=True,
+        )
+    except ZipValidationError as exc:
+        raise HTTPException(status_code=412, detail=str(exc)) from exc
+
+    # Check compressed size
+    if len(zip_bytes) > settings.BACKEND_MAX_ATTACHMENT_SIZE_BYTES:
+        raise HTTPException(
+            status_code=412,
+            detail=f'Max file size is {settings.BACKEND_MAX_ATTACHMENT_SIZE_BYTES}',
+        )
+
+    job_id = uuid.uuid4()
+    secret_ref = os.urandom(32).hex()
+    result_token = os.urandom(32).hex()
+
+    openai_token, key_mode = _encode_openai_token(
+        openai_key=openai_key or '',
+        use_proxy_static=use_proxy_static,
+        use_proxy_tokens=use_proxy_tokens,
+    )
+
+    bundle = build_secret_bundle_from_bytes(zip_bytes=zip_bytes, openai_token=openai_token, key_mode=key_mode)
+    await secret_storage.save_secret(secret_ref, bundle)
+
+    job = Job(
+        id=job_id,
+        status=JobStatus.queued,
+        user_id=token.user_id,
+        secret_ref=secret_ref,
+        result_token=result_token,
+        model=form.model,
+        file_name=filename[:128],
+    )
+    session.add(job)
+
+    await session.commit()
+    try:
+        await publisher.publish_job_start(
+            job_id=str(job_id),
+            secret_ref=secret_ref,
+            model=form.model,
+            result_token=result_token,
+        )
+    except Exception as err:
+        with suppress(Exception):
+            await secret_storage.delete_secret(secret_ref)
+        await session.delete(job)
+        await session.commit()
+        raise HTTPException(
+            status_code=502,
+            detail='Failed to enqueue job',
+        ) from err
+
+    return StartJobResponse(job_id=job_id, status=job.status)
 
 
 @router.get('/history')

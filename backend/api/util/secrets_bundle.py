@@ -27,3 +27,20 @@ def build_secret_bundle(*, upload: UploadFile, openai_token: str, key_mode: str)
         tar.addfile(key_info, fileobj=io.BytesIO(key_payload))
 
     return buffer.getvalue()
+
+
+def build_secret_bundle_from_bytes(*, zip_bytes: bytes, openai_token: str, key_mode: str) -> bytes:
+    """Build a secret bundle from raw zip bytes instead of an UploadFile."""
+    key_payload = orjson.dumps({'openai_token': openai_token, 'key_mode': key_mode})
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode='w') as tar:
+        upload_info = tarfile.TarInfo(name='upload.zip')
+        upload_info.size = len(zip_bytes)
+        tar.addfile(upload_info, fileobj=io.BytesIO(zip_bytes))
+
+        key_info = tarfile.TarInfo(name='key.json')
+        key_info.size = len(key_payload)
+        tar.addfile(key_info, fileobj=io.BytesIO(key_payload))
+
+    return buffer.getvalue()

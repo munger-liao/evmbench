@@ -4,6 +4,7 @@ import {
   AlertDiamondIcon,
   ArrowDown01Icon,
   Cancel01Icon,
+  Download04Icon,
   File01Icon,
   SourceCodeIcon,
   TestTube01Icon,
@@ -24,6 +25,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { useLocalStorage } from "@/hooks/use-local-storage"
+import {
+  downloadAllVulnerabilities,
+  downloadVulnerability,
+} from "@/lib/download-vulnerabilities"
 import { truncateFilePath } from "@/lib/paths"
 import { cn } from "@/lib/utils"
 import { sortVulnerabilitiesBySeverity } from "@/lib/vulnerabilities"
@@ -37,6 +42,7 @@ interface MobileResultsViewProps {
   selectedNode: FileNode | null
   codeAnnotations: CodeAnnotation[]
   scrollToLine?: number | null
+  jobId?: string | null
 }
 
 function SectionHeader({
@@ -204,6 +210,7 @@ export function MobileResultsView({
   selectedNode,
   codeAnnotations,
   scrollToLine,
+  jobId,
 }: MobileResultsViewProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [codeSheetOpen, setCodeSheetOpen] = useState(false)
@@ -318,15 +325,35 @@ export function MobileResultsView({
               </p>
             </div>
           ) : (
-            sortedVulnerabilities.map((vuln) => (
-              <VulnerabilityCard
-                key={vuln.id}
-                vulnerability={vuln}
-                isExpanded={expandedId === vuln.id}
-                onToggle={() => handleToggle(vuln)}
-                onViewCode={handleViewCode}
-              />
-            ))
+            <>
+              <div className="flex items-center justify-between border-b border-border/50 px-4 py-2">
+                <span className="text-sm font-medium">
+                  {sortedVulnerabilities.length} vulnerabilities
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadAllVulnerabilities(
+                      sortedVulnerabilities,
+                      jobId ?? undefined
+                    )
+                  }
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                >
+                  <HugeiconsIcon icon={Download04Icon} size={14} />
+                  <span>Download All</span>
+                </button>
+              </div>
+              {sortedVulnerabilities.map((vuln) => (
+                <VulnerabilityCard
+                  key={vuln.id}
+                  vulnerability={vuln}
+                  isExpanded={expandedId === vuln.id}
+                  onToggle={() => handleToggle(vuln)}
+                  onViewCode={handleViewCode}
+                />
+              ))}
+            </>
           )}
         </div>
       </ScrollArea>

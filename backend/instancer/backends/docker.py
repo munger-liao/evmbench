@@ -48,6 +48,7 @@ class DockerBackend(BackendABC):
         }
         if settings.INSTANCER_OAI_PROXY_BASE_URL:
             env['OAI_PROXY_BASE_URL'] = settings.INSTANCER_OAI_PROXY_BASE_URL
+            env['OAI_PROXY_WIRE_API'] = settings.INSTANCER_OAI_PROXY_WIRE_API
 
         container = await docker.containers.create(
             config={

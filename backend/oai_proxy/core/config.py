@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Static OpenAI key - when set, requests with "Bearer STATIC" use this key
     # The real key never leaves this service
     OAI_PROXY_STATIC_KEY: Secret[str] | None = None
+    # OpenAI API base URL - configurable for custom endpoints (e.g., Azure OpenAI, local LLMs)
+    OAI_PROXY_OPENAI_BASE_URL: str = 'https://api.openai.com'
 
 
 settings = Settings()  # type: ignore[missing-argument]

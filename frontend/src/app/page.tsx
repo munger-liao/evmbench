@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from "react"
 import { AppFooter } from "@/components/app-footer"
 import { AppHeader } from "@/components/app-header"
 import { FileUploader } from "@/components/file-uploader"
+import { GitHubUrlInput } from "@/components/github-url-input"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,23 +19,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/hooks/use-auth"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import { useSessionStorage } from "@/hooks/use-session-storage"
 import { API_BASE } from "@/lib/api"
-import { startJob } from "@/lib/jobs"
-import { addRecentJob, type RecentJob } from "@/lib/recent-jobs"
+import { startJob, startJobFromGitHub } from "@/lib/jobs"
+import { addRecentJob, removeRecentJob, type RecentJob } from "@/lib/recent-jobs"
 import { inferPackageName } from "@/lib/upload-utils"
 import { createZipFromFiles } from "@/lib/zip"
 import { useUploadStore } from "@/store/upload-store"
 import openaiSmall from "../../public/openai-small.svg"
 import paradigmSmall from "../../public/paradigm-small.svg"
 
+const GITHUB_URL_PATTERN =
+  /^https?:\/\/github\.com\/[^/]+\/[^/]+(\/tree\/[^/]+(\/.*)?)?$/
+
 export default function Page() {
   const router = useRouter()
-  const { files, packageName, setUpload, clearUpload } = useUploadStore()
+  const {
+    mode,
+    files,
+    packageName,
+    githubUrl,
+    setMode,
+    setUpload,
+    setGitHubUrl,
+    setFromGitHub,
+    clearUpload,
+  } = useUploadStore()
   const [openaiKey, setOpenaiKey] = useSessionStorage("evmbench.openaiKey", "")
-  const [model, setModel] = useState("codex-gpt-5.2")
+  const [model, setModel] = useState("gpt-5.2")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [recentJobs, setRecentJobs] = useLocalStorage<RecentJob[]>(
@@ -50,13 +65,27 @@ export default function Page() {
 
   const fileCount = files?.length ?? 0
   const selectedLabel = useMemo(() => {
+    if (mode === "github" && githubUrl.trim()) {
+      // Extract repo name from GitHub URL
+      const match = githubUrl.match(/github\.com\/[^/]+\/([^/]+)/)
+      return match ? match[1].replace(/\.git$/, "") : "github-repo"
+    }
     if (packageName) return packageName
     if (files) return inferPackageName(files)
     return null
-  }, [files, packageName])
+  }, [mode, githubUrl, files, packageName])
 
-  const canSubmit =
-    !!files && fileCount > 0 && !isSubmitting && !isAuthLoading && isAuthorized
+  const isValidGitHubUrl = useMemo(() => {
+    return GITHUB_URL_PATTERN.test(githubUrl.trim())
+  }, [githubUrl])
+
+  const canSubmit = useMemo(() => {
+    if (isSubmitting || isAuthLoading || !isAuthorized) return false
+    if (mode === "files") {
+      return !!files && fileCount > 0
+    }
+    return isValidGitHubUrl
+  }, [mode, files, fileCount, isValidGitHubUrl, isSubmitting, isAuthLoading, isAuthorized])
 
   const handleFilesSelected = useCallback(
     (selected: File[]) => {
@@ -73,11 +102,14 @@ export default function Page() {
   )
 
   const handleSubmit = async () => {
-    if (!files || fileCount === 0) return
     if (!isAuthorized) {
       setSubmitError("Authorize with GitHub to start analysis.")
       return
     }
+
+    if (mode === "files" && (!files || fileCount === 0)) return
+    if (mode === "github" && !isValidGitHubUrl) return
+
     const trimmedKey = openaiKey.trim()
 
     setIsSubmitting(true)
@@ -85,13 +117,23 @@ export default function Page() {
 
     try {
       const name = selectedLabel ?? "files"
-      const zipFile = await createZipFromFiles(files, name)
-      const response = await startJob(zipFile, model, trimmedKey)
+      let response
+
+      if (mode === "github") {
+        response = await startJobFromGitHub(githubUrl.trim(), model, trimmedKey)
+        setFromGitHub(true)
+      } else {
+        const zipFile = await createZipFromFiles(files!, name)
+        response = await startJob(zipFile, model, trimmedKey)
+        setFromGitHub(false)
+      }
+
       // Persist locally so users can navigate back without server-side auth/history.
       const next = addRecentJob({
         job_id: response.job_id,
         label: name,
         created_at_ms: Date.now(),
+        source: mode,
       })
       setRecentJobs(next)
       router.push(`/results?job_id=${response.job_id}`)
@@ -185,14 +227,32 @@ export default function Page() {
             </div>
 
             <div className="space-y-6 lg:col-span-2">
-              <FileUploader
-                onFilesSelected={handleFilesSelected}
-                files={files}
-                selectedLabel={selectedLabel}
-                fileCount={fileCount}
-                disabled={isSubmitting}
-                onClear={clearUpload}
-              />
+              <Tabs
+                value={mode}
+                onValueChange={(v) => setMode(v as "files" | "github")}
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="files">Upload Files</TabsTrigger>
+                  <TabsTrigger value="github">GitHub URL</TabsTrigger>
+                </TabsList>
+                <TabsContent value="files" className="mt-4">
+                  <FileUploader
+                    onFilesSelected={handleFilesSelected}
+                    files={files}
+                    selectedLabel={selectedLabel}
+                    fileCount={fileCount}
+                    disabled={isSubmitting}
+                    onClear={clearUpload}
+                  />
+                </TabsContent>
+                <TabsContent value="github" className="mt-4">
+                  <GitHubUrlInput
+                    value={githubUrl}
+                    onChange={setGitHubUrl}
+                    disabled={isSubmitting}
+                  />
+                </TabsContent>
+              </Tabs>
 
               <div className="grid gap-3 text-xs text-muted-foreground">
                 {!isConfigLoading && !keyPredefined && (
@@ -224,12 +284,8 @@ export default function Page() {
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="codex-gpt-5.2">
-                        codex-gpt-5.2
-                      </SelectItem>
-                      <SelectItem value="codex-gpt-5.1-codex-max">
-                        codex-gpt-5.1-codex-max
-                      </SelectItem>
+                      <SelectItem value="gpt-5.2">gpt-5.2</SelectItem>
+                      <SelectItem value="gpt-5.1">gpt-5.1</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -271,22 +327,50 @@ export default function Page() {
                     </div>
                     <div className="mt-2 space-y-1">
                       {recentJobs.slice(0, 6).map((job) => (
-                        <button
+                        <div
                           key={job.job_id}
-                          type="button"
-                          onClick={() =>
-                            router.push(`/results?job_id=${job.job_id}`)
-                          }
-                          className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/40"
-                          title={job.job_id}
+                          className="group flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/40"
                         >
-                          <span className="min-w-0 flex-1 truncate text-foreground">
-                            {job.label}
-                          </span>
-                          <span className="shrink-0 font-mono text-muted-foreground">
-                            {job.job_id.slice(0, 8)}
-                          </span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(`/results?job_id=${job.job_id}`)
+                            }
+                            className="flex min-w-0 flex-1 items-center justify-between gap-3"
+                            title={job.job_id}
+                          >
+                            <span className="min-w-0 flex-1 truncate text-foreground">
+                              {job.label}
+                            </span>
+                            <span className="shrink-0 font-mono text-muted-foreground">
+                              {job.job_id.slice(0, 8)}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setRecentJobs(removeRecentJob(job.job_id))
+                            }}
+                            className="shrink-0 p-0.5 text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
+                            title="Remove from list"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M18 6 6 18" />
+                              <path d="m6 6 12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
