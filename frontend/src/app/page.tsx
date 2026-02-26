@@ -285,7 +285,7 @@ export default function Page() {
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="claude-opus-4-5">Claude Opus 4.5</SelectItem>
+                      <SelectItem value="claude-opus-4-6">Claude Opus 4.6</SelectItem>
                       <SelectItem value="gpt-5.2">GPT-5.2</SelectItem>
                       <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
                     </SelectContent>

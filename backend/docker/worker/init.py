@@ -43,7 +43,7 @@ PI_RUNNER_SH = RUNNER_DIR / 'run_pi_detect.sh'
 
 # Models that should use Pi agent instead of Codex
 # Codex has compatibility issues with non-OpenAI models
-PI_AGENT_MODELS = {'claude-opus-4-5', 'gemini-3-flash-preview'}
+PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview'}
 
 
 def _write_codex_proxy_config(*, home: Path) -> None:
