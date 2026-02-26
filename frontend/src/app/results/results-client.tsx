@@ -96,6 +96,7 @@ export default function ResultsClient() {
       job_id: jobId,
       label: job.file_name?.replace(/\.zip$/, "") ?? "run",
       created_at_ms: Date.now(),
+      model: job.model,
     })
   }, [jobId, job])
 

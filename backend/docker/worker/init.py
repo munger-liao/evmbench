@@ -39,6 +39,11 @@ RUNNER_DIR = Path(os.getenv('EVM_BENCH_RUNNER_DIR') or '/opt/evmbench/worker_run
 DETECT_MD_PATH = RUNNER_DIR / 'detect.md'
 MODEL_MAP_PATH = RUNNER_DIR / 'model_map.json'
 CODEX_RUNNER_SH = RUNNER_DIR / 'run_codex_detect.sh'
+PI_RUNNER_SH = RUNNER_DIR / 'run_pi_detect.sh'
+
+# Models that should use Pi agent instead of Codex
+# Codex has compatibility issues with non-OpenAI models
+PI_AGENT_MODELS = {'claude-opus-4-5', 'gemini-3-flash-preview'}
 
 
 def _write_codex_proxy_config(*, home: Path) -> None:
@@ -101,26 +106,36 @@ def _resolve_codex_model(*, model_key: str, model_map: dict[str, str]) -> str:
 
 
 def _extract_fenced_json(text: str) -> str:
-    start = text.find('```json')
-    if start == -1:
-        return text
-    start = text.find('\n', start)
-    if start == -1:
-        return text
-    end = text.find('```', start + 1)
-    if end == -1:
-        return text
-    return text[start + 1 : end].strip()
+    """Extract JSON from text, handling optional markdown fenced code block."""
+    text = text.strip()
+
+    # If it starts with ```, extract content from fenced block
+    if text.startswith('```'):
+        # Find end of first line (skip ```json or similar)
+        start = text.find('\n')
+        if start == -1:
+            return text
+        # Find closing ``` at line start
+        pos = start + 1
+        while pos < len(text):
+            end = text.find('```', pos)
+            if end == -1:
+                break
+            if text[end - 1] == '\n':
+                return text[start + 1 : end].strip()
+            pos = end + 3
+
+    return text
 
 
 def _validate_report_payload(payload: object) -> dict:
     if not isinstance(payload, dict):
-        msg = 'audit.md JSON payload must be an object'
+        msg = 'audit JSON payload must be an object'
         raise TypeError(msg)
 
     vulns = payload.get('vulnerabilities')
     if not isinstance(vulns, list):
-        msg = 'audit.md JSON payload must contain vulnerabilities: [...]'
+        msg = 'audit JSON payload must contain vulnerabilities: [...]'
         raise TypeError(msg)
 
     # Lightweight schema sanity checks (keep UI robust to agent weirdness).
@@ -146,7 +161,7 @@ def _validate_report_payload(payload: object) -> dict:
 def _extract_json_payload(audit_md: str) -> dict:
     text = (audit_md or '').strip()
     if not text:
-        msg = 'Empty audit.md'
+        msg = 'Empty audit file'
         raise ValueError(msg)
 
     # Prefer fenced JSON block; fall back to raw text.
@@ -154,7 +169,7 @@ def _extract_json_payload(audit_md: str) -> dict:
     try:
         payload = json.loads(json_text)
     except json.JSONDecodeError as err:
-        msg = f'audit.md does not contain valid JSON: {err}'
+        msg = f'audit file does not contain valid JSON: {err}'
         raise ValueError(msg) from err
 
     return _validate_report_payload(payload)
@@ -206,12 +221,71 @@ def _run_codex_detect(*, openai_token: str, key_mode: str) -> Path:
         msg = f'Codex runner failed with code={proc.returncode}:\n{proc.stdout}'
         raise RuntimeError(msg)
 
+    # Look for audit.json first (preferred), fall back to audit.md
+    audit_json_path = SUBMISSION_DIR / 'audit.json'
     audit_md_path = SUBMISSION_DIR / 'audit.md'
-    if not audit_md_path.exists():
-        msg = f'Missing expected output: {audit_md_path}'
+    if audit_json_path.exists():
+        return audit_json_path
+    if audit_md_path.exists():
+        return audit_md_path
+    msg = f'Missing expected output: {audit_json_path} or {audit_md_path}'
+    raise RuntimeError(msg)
+
+
+def _run_pi_detect(*, openai_token: str, key_mode: str) -> Path:
+    """Run Pi agent for non-OpenAI models (Claude, Gemini, etc.)."""
+    env = os.environ.copy()
+    env['HOME'] = str(AGENT_DIR)
+    env['AGENT_DIR'] = str(AGENT_DIR)
+    env['SUBMISSION_DIR'] = str(SUBMISSION_DIR)
+    env['LOGS_DIR'] = str(LOGS_DIR)
+
+    if not DETECT_MD_PATH.exists():
+        msg = f'Missing detect instructions: {DETECT_MD_PATH}'
+        raise RuntimeError(msg)
+    if not PI_RUNNER_SH.exists():
+        msg = f'Missing Pi runner: {PI_RUNNER_SH}'
         raise RuntimeError(msg)
 
-    return audit_md_path
+    # Build API URL and key for Pi
+    base_url = OAI_PROXY_BASE_URL.rstrip('/')
+    if not base_url.endswith('/v1'):
+        base_url = f'{base_url}/v1'
+
+    # Encode real model name in API key for oai_proxy
+    api_key = openai_token
+    if key_mode in {'proxy', 'proxy_static'} and MODEL_KEY:
+        api_key = f'{openai_token}::{MODEL_KEY}'
+
+    env['PI_API_KEY'] = api_key
+    env['PI_MODEL'] = MODEL_KEY  # Use the actual model name
+    env['PI_BASE_URL'] = base_url
+    env['EVM_BENCH_DETECT_MD'] = str(DETECT_MD_PATH)
+
+    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(  # noqa: S603
+        [str(PI_RUNNER_SH)],
+        cwd=str(AGENT_DIR),
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    (LOGS_DIR / 'runner.log').write_text(proc.stdout or '', encoding='utf-8')
+    if proc.returncode != 0:
+        msg = f'Pi runner failed with code={proc.returncode}:\n{proc.stdout}'
+        raise RuntimeError(msg)
+
+    # Look for audit.json first (preferred), fall back to audit.md
+    audit_json_path = SUBMISSION_DIR / 'audit.json'
+    audit_md_path = SUBMISSION_DIR / 'audit.md'
+    if audit_json_path.exists():
+        return audit_json_path
+    if audit_md_path.exists():
+        return audit_md_path
+    msg = f'Missing expected output: {audit_json_path} or {audit_md_path}'
+    raise RuntimeError(msg)
 
 
 def _unpack_bundle(bundle: bytes, work_dir: Path) -> tuple[Path, str, str]:
@@ -284,7 +358,13 @@ async def main() -> None:
 
         logger.info('Extracted the bundle, running detect-only agent...')
         try:
-            audit_md = _run_codex_detect(openai_token=openai_token, key_mode=key_mode)
+            # Choose agent based on model
+            if MODEL_KEY in PI_AGENT_MODELS:
+                logger.info(f'Using Pi agent for model: {MODEL_KEY}')
+                audit_md = _run_pi_detect(openai_token=openai_token, key_mode=key_mode)
+            else:
+                logger.info(f'Using Codex agent for model: {MODEL_KEY}')
+                audit_md = _run_codex_detect(openai_token=openai_token, key_mode=key_mode)
             audit_text = audit_md.read_text()
             _extract_json_payload(audit_text)
 
@@ -293,7 +373,7 @@ async def main() -> None:
                 'status': 'succeeded',
                 'report': audit_text,
             }
-            logger.info('audit.md validated successfully')
+            logger.info('audit report validated successfully')
         except Exception as err:  # noqa: BLE001
             report_payload = {
                 'job_id': JOB_ID,

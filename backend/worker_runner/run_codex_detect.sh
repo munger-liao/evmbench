@@ -34,7 +34,7 @@ fi
 cp "${EVM_BENCH_DETECT_MD}" "${AGENT_DIR}/AGENTS.md"
 
 # Ensure a clean output.
-rm -f "${SUBMISSION_DIR}/audit.md"
+rm -f "${SUBMISSION_DIR}/audit.json" "${SUBMISSION_DIR}/audit.md"
 
 LAUNCHER_PROMPT=$'You are an expert smart contract auditor.\nFirst read the AGENTS.md file for your detailed instructions.\nThen proceed. Ensure to follow the submission instructions exactly.'
 
@@ -52,8 +52,9 @@ timeout --signal=KILL "${TIMEOUT_SECONDS}s" codex exec \
   "${LAUNCHER_PROMPT}" \
   > "${LOGS_DIR}/agent.log" 2>&1
 
-if [[ ! -s "${SUBMISSION_DIR}/audit.md" ]]; then
-  echo "missing expected output: ${SUBMISSION_DIR}/audit.md" >&2
+# Check if audit output was created (prefer .json, fall back to .md)
+if [[ ! -s "${SUBMISSION_DIR}/audit.json" ]] && [[ ! -s "${SUBMISSION_DIR}/audit.md" ]]; then
+  echo "missing expected output: ${SUBMISSION_DIR}/audit.json or audit.md" >&2
   exit 2
 fi
 

@@ -134,6 +134,7 @@ export default function Page() {
         label: name,
         created_at_ms: Date.now(),
         source: mode,
+        model,
       })
       setRecentJobs(next)
       router.push(`/results?job_id=${response.job_id}`)
@@ -327,7 +328,11 @@ export default function Page() {
                       </button>
                     </div>
                     <div className="mt-2 space-y-1">
-                      {recentJobs.slice(0, 6).map((job) => (
+                      {recentJobs
+                        .slice()
+                        .sort((a, b) => b.created_at_ms - a.created_at_ms)
+                        .slice(0, 6)
+                        .map((job) => (
                         <div
                           key={job.job_id}
                           className="group flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted/40"
@@ -343,8 +348,11 @@ export default function Page() {
                             <span className="min-w-0 flex-1 truncate text-foreground">
                               {job.label}
                             </span>
-                            <span className="shrink-0 font-mono text-muted-foreground">
-                              {job.job_id.slice(0, 8)}
+                            <span className="shrink-0 text-muted-foreground/70">
+                              {job.model ?? "—"}
+                            </span>
+                            <span className="shrink-0 text-muted-foreground">
+                              {new Date(job.created_at_ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </button>
                           <button
