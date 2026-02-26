@@ -49,7 +49,7 @@ export default function Page() {
     clearUpload,
   } = useUploadStore()
   const [openaiKey, setOpenaiKey] = useSessionStorage("evmbench.openaiKey", "")
-  const [model, setModel] = useState("claude-opus-4-5")
+  const [model, setModel] = useState("gpt-5.2")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [recentJobs, setRecentJobs] = useLocalStorage<RecentJob[]>(

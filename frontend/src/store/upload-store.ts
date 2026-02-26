@@ -19,7 +19,7 @@ export const useUploadStore = create<UploadState>((set) => ({
   mode: "github",
   files: null,
   packageName: null,
-  githubUrl: "https://github.com/paulrberg/prb-math",
+  githubUrl: "https://github.com/OpenZeppelin/openzeppelin-contracts/tree/master/contracts/token/ERC20",
   fromGitHub: false,
   setMode: (mode) => set({ mode }),
   setUpload: (files, packageName) => set({ files, packageName }),
