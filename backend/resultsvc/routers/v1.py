@@ -90,7 +90,7 @@ def _load_report(report: str | None) -> dict[str, Any] | None:
         return None
 
     try:
-        report_data = json.loads(report[json_start : json_end + 1])
+        report_data = json.loads(report[json_start : json_end + 1], strict=False)
     except json.JSONDecodeError:
         logger.warning(f'Got report with invalid json: {report!r}')
         return None

@@ -1,4 +1,4 @@
-from pydantic import Secret
+from pydantic import Field, Secret
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from api.util.fs import ROOT_DIR
@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     OAI_PROXY_STATIC_KEY: Secret[str] | None = None
     # OpenAI API base URL - configurable for custom endpoints (e.g., Azure OpenAI, local LLMs)
     OAI_PROXY_OPENAI_BASE_URL: str = 'https://api.openai.com'
+    # Per-model route overrides: {"model_name": {"base_url": "...", "api_key": "..."}}
+    OAI_PROXY_MODEL_ROUTES: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 settings = Settings()  # type: ignore[missing-argument]

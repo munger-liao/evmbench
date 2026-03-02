@@ -43,7 +43,7 @@ PI_RUNNER_SH = RUNNER_DIR / 'run_pi_detect.sh'
 
 # Models that should use Pi agent instead of Codex
 # Codex has compatibility issues with non-OpenAI models
-PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview'}
+PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview', 'gpt-5.3-codex'}
 
 
 def _write_codex_proxy_config(*, home: Path) -> None:
@@ -167,7 +167,7 @@ def _extract_json_payload(audit_md: str) -> dict:
     # Prefer fenced JSON block; fall back to raw text.
     json_text = _extract_fenced_json(text)
     try:
-        payload = json.loads(json_text)
+        payload = json.loads(json_text, strict=False)
     except json.JSONDecodeError as err:
         msg = f'audit file does not contain valid JSON: {err}'
         raise ValueError(msg) from err
@@ -232,9 +232,25 @@ def _run_codex_detect(*, openai_token: str, key_mode: str) -> Path:
     raise RuntimeError(msg)
 
 
+def _load_model_routes() -> dict[str, dict[str, str]]:
+    raw = os.getenv('OAI_PROXY_MODEL_ROUTES', '').strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {}
+
+
 def _run_pi_detect(*, openai_token: str, key_mode: str) -> Path:
     """Run Pi agent for non-OpenAI models (Claude, Gemini, etc.)."""
     env = os.environ.copy()
+    # Remove variables that may conflict with Pi's provider detection
+    for key in ('OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL'):
+        env.pop(key, None)
     env['HOME'] = str(AGENT_DIR)
     env['AGENT_DIR'] = str(AGENT_DIR)
     env['SUBMISSION_DIR'] = str(SUBMISSION_DIR)
@@ -247,19 +263,35 @@ def _run_pi_detect(*, openai_token: str, key_mode: str) -> Path:
         msg = f'Missing Pi runner: {PI_RUNNER_SH}'
         raise RuntimeError(msg)
 
-    # Build API URL and key for Pi
-    base_url = OAI_PROXY_BASE_URL.rstrip('/')
-    if not base_url.endswith('/v1'):
-        base_url = f'{base_url}/v1'
+    # Check if this model has a direct route (e.g. Azure OpenAI)
+    model_routes = _load_model_routes()
+    route = model_routes.get(MODEL_KEY)
 
-    # Encode real model name in API key for oai_proxy
-    api_key = openai_token
-    if key_mode in {'proxy', 'proxy_static'} and MODEL_KEY:
-        api_key = f'{openai_token}::{MODEL_KEY}'
+    if route:
+        # Direct route: Pi connects to upstream directly (e.g. Azure)
+        env['PI_AZURE_BASE_URL'] = route['base_url'].rstrip('/')
+        env['PI_AZURE_API_KEY'] = route['api_key']
+        env['PI_MODEL'] = MODEL_KEY
+        env['PI_WIRE_API'] = 'openai-responses'
+        env['PI_CONTEXT_WINDOW'] = '400000'
+        logger.info(f'Pi using direct route for {MODEL_KEY}: {route["base_url"]}')
+    else:
+        # Default: go through oai_proxy
+        base_url = OAI_PROXY_BASE_URL.rstrip('/')
+        if not base_url.endswith('/v1'):
+            base_url = f'{base_url}/v1'
 
-    env['PI_API_KEY'] = api_key
-    env['PI_MODEL'] = MODEL_KEY  # Use the actual model name
-    env['PI_BASE_URL'] = base_url
+        # Encode real model name in API key for oai_proxy
+        api_key = openai_token
+        if key_mode in {'proxy', 'proxy_static'} and MODEL_KEY:
+            api_key = f'{openai_token}::{MODEL_KEY}'
+
+        env['PI_API_KEY'] = api_key
+        env['PI_MODEL'] = MODEL_KEY
+        env['PI_BASE_URL'] = base_url
+        env['PI_WIRE_API'] = 'openai-completions'
+        env['PI_CONTEXT_WINDOW'] = '128000'
+
     env['EVM_BENCH_DETECT_MD'] = str(DETECT_MD_PATH)
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)

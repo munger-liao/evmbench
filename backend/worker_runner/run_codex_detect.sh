@@ -48,7 +48,7 @@ timeout --signal=KILL "${TIMEOUT_SECONDS}s" codex exec \
   --model "${CODEX_MODEL}" \
   --dangerously-bypass-approvals-and-sandbox \
   --skip-git-repo-check \
-  --experimental-json \
+  --json \
   "${LAUNCHER_PROMPT}" \
   > "${LOGS_DIR}/agent.log" 2>&1
 

@@ -88,6 +88,11 @@ class Settings(BaseSettings):
         default='responses',
         validation_alias=AliasChoices('INSTANCER_OAI_PROXY_WIRE_API', 'OAI_PROXY_WIRE_API'),
     )
+    # Per-model route overrides forwarded to workers so Pi can bypass the proxy
+    INSTANCER_OAI_PROXY_MODEL_ROUTES: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices('INSTANCER_OAI_PROXY_MODEL_ROUTES', 'OAI_PROXY_MODEL_ROUTES'),
+    )
 
     @field_validator('INSTANCER_OAI_PROXY_BASE_URL', mode='before')
     @classmethod

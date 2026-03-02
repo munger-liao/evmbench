@@ -287,6 +287,7 @@ export default function Page() {
                     <SelectContent>
                       <SelectItem value="claude-opus-4-6">Claude Opus 4.6</SelectItem>
                       <SelectItem value="gpt-5.2">GPT-5.2</SelectItem>
+                      <SelectItem value="gpt-5.3-codex">GPT-5.3 Codex</SelectItem>
                       <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
                     </SelectContent>
                   </Select>

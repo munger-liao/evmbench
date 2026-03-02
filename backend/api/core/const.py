@@ -3,4 +3,6 @@ ALLOWED_MODELS = {
     'gpt-5.2',
     'claude-opus-4-6',
     'gemini-3-flash-preview',
+    # Direct Azure OpenAI
+    'gpt-5.3-codex',
 }

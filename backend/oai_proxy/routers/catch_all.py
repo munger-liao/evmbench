@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Iterable
 from functools import lru_cache
 from urllib.parse import quote
@@ -11,6 +12,10 @@ from starlette.responses import StreamingResponse
 
 from api.util.aes_gcm import decrypt_token, derive_key
 from oai_proxy.core.config import settings
+
+# 429 retry config
+MAX_RETRIES = 5
+DEFAULT_RETRY_WAIT = 10  # seconds when Retry-After header is missing
 
 # Marker token that triggers use of the static key
 STATIC_KEY_MARKER = 'STATIC'
@@ -102,9 +107,15 @@ def _filter_headers(items: Iterable[tuple[str, str]]) -> dict[str, str]:
     return headers
 
 
-def _filter_body_params(body: dict, real_model: str | None = None) -> dict:
+def _filter_body_params(
+    body: dict,
+    real_model: str | None = None,
+    *,
+    skip_params: set[str] | None = None,
+) -> dict:
     """Remove unsupported parameters and optionally substitute model name."""
-    filtered = {k: v for k, v in body.items() if k not in UNSUPPORTED_BODY_PARAMS}
+    blocked = skip_params if skip_params is not None else UNSUPPORTED_BODY_PARAMS
+    filtered = {k: v for k, v in body.items() if k not in blocked}
 
     # Substitute model name if real_model is provided (for non-OpenAI models)
     if real_model and 'model' in filtered:
@@ -114,7 +125,7 @@ def _filter_body_params(body: dict, real_model: str | None = None) -> dict:
     if 'messages' in filtered and isinstance(filtered['messages'], list):
         for msg in filtered['messages']:
             if isinstance(msg, dict):
-                for param in UNSUPPORTED_BODY_PARAMS:
+                for param in blocked:
                     msg.pop(param, None)
     return filtered
 
@@ -137,8 +148,42 @@ async def _proxy_request(request: Request, path: str) -> StreamingResponse:
         try:
             body_json = json.loads(raw_body)
             logger.info(f'Original model: {body_json.get("model")}, real_model: {real_model}, path: {target_path}')
-            filtered_body = _filter_body_params(body_json, real_model=real_model)
+
+            # Per-model route override — check before filtering so we know
+            # which params to keep (direct OpenAI-compat endpoints need `store`).
+            effective_model = real_model or body_json.get('model')
+            route = settings.OAI_PROXY_MODEL_ROUTES.get(effective_model) if effective_model else None
+            if route:
+                base_url = route['base_url'].rstrip('/')
+                if 'api_key' in route:
+                    forward_headers['authorization'] = f'Bearer {route["api_key"]}'
+                logger.info(f'Model route override: {effective_model} -> {base_url}')
+
+            # For routed models (direct OpenAI-compat endpoints), keep `store`
+            # but force it to true so server-side context is preserved for
+            # previous_response_id chaining across turns.
+            skip = UNSUPPORTED_BODY_PARAMS - {'store'} if route else UNSUPPORTED_BODY_PARAMS
+            filtered_body = _filter_body_params(body_json, real_model=real_model, skip_params=skip)
+            if route and 'store' in filtered_body:
+                filtered_body['store'] = True
             logger.info(f'Filtered model: {filtered_body.get("model")}')
+
+            # Debug: log key request params for routed models
+            if route:
+                tools = filtered_body.get('tools', [])
+                tool_names = [t.get('name', t.get('function', {}).get('name', '?')) for t in tools] if isinstance(tools, list) else '?'
+                input_val = filtered_body.get('input', '')
+                input_len = len(json.dumps(input_val)) if input_val else 0
+                input_count = len(input_val) if isinstance(input_val, list) else 0
+                prev_id = filtered_body.get('previous_response_id')
+                logger.info(
+                    f'Route debug: store={filtered_body.get("store")}, '
+                    f'prev_resp_id={prev_id}, '
+                    f'tools={tool_names}, '
+                    f'input_len={input_len}, input_msgs={input_count}, '
+                    f'keys={list(filtered_body.keys())}'
+                )
+
             body_bytes = json.dumps(filtered_body).encode('utf-8')
         except (json.JSONDecodeError, TypeError):
             body_bytes = raw_body
@@ -149,16 +194,39 @@ async def _proxy_request(request: Request, path: str) -> StreamingResponse:
     target_url = f'{base_url}/{encoded_path}' if encoded_path else base_url
 
     client = httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=None))
-    upstream = await client.send(
-        client.build_request(
-            request.method,
-            target_url,
-            params=params,
-            headers=forward_headers,
-            content=body_bytes,
-        ),
-        stream=True,
-    )
+
+    # Retry loop for 429 rate limiting
+    for attempt in range(MAX_RETRIES + 1):
+        upstream = await client.send(
+            client.build_request(
+                request.method,
+                target_url,
+                params=params,
+                headers=forward_headers,
+                content=body_bytes,
+            ),
+            stream=True,
+        )
+
+        if upstream.status_code != 429 or attempt == MAX_RETRIES:
+            break
+
+        # Read body so connection is released, then wait and retry
+        await upstream.aread()
+        await upstream.aclose()
+
+        retry_after = upstream.headers.get('retry-after')
+        try:
+            wait = int(retry_after) if retry_after else DEFAULT_RETRY_WAIT
+        except (ValueError, TypeError):
+            wait = DEFAULT_RETRY_WAIT
+        wait = min(wait, 60)  # cap at 60s
+
+        logger.warning(
+            f'429 rate limited (attempt {attempt + 1}/{MAX_RETRIES}), '
+            f'waiting {wait}s before retry: {target_url}'
+        )
+        await asyncio.sleep(wait)
 
     response_headers = _filter_headers(upstream.headers.items())
 

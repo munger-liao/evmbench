@@ -168,3 +168,6 @@ cython_debug/
 .vscode/
 
 records/
+USAGE_CN.md
+DEV_GUIDE.md
+CLAUDE.md
