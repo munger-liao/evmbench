@@ -40,15 +40,15 @@ fi
   AUDIT_DIR="${AGENT_DIR}/audit"
   FILE_COUNT=0
   TOTAL_CHARS=0
-  MAX_CHARS=300000  # ~75k tokens, leave room for instructions + output
+  MAX_CHARS=400000  # ~100k tokens, leave room for instructions + output
 
   # Collect .sol files, excluding common non-source dirs
   while IFS= read -r -d '' sol_file; do
     rel_path="${sol_file#${AUDIT_DIR}/}"
 
-    # Skip test/lib/node_modules directories
+    # Skip test/lib/node_modules/macOS metadata directories and dotfiles
     case "${rel_path}" in
-      test/*|tests/*|lib/*|node_modules/*|.git/*) continue ;;
+      test/*|tests/*|lib/*|node_modules/*|.git/*|__MACOSX/*|script/*|.*) continue ;;
     esac
 
     file_size=$(wc -c < "${sol_file}")
@@ -88,7 +88,12 @@ mkdir -p "${PI_CONFIG_DIR}"
 PROVIDER_NAME=""
 RETRY_PROXY_PID=""
 
-if [[ -n "${PI_AZURE_BASE_URL:-}" ]]; then
+if [[ -n "${PI_PROVIDER:-}" ]]; then
+  # Native provider (e.g. Google Gemini) — Pi handles API directly
+  PROVIDER_NAME="${PI_PROVIDER}"
+  echo "Using Pi native provider: ${PI_PROVIDER}, model: ${PI_MODEL}" >&2
+
+elif [[ -n "${PI_AZURE_BASE_URL:-}" ]]; then
   # Direct Azure with 429-retry proxy
   RETRY_PROXY_PORT=19191
 
@@ -135,7 +140,14 @@ class H(BaseHTTPRequestHandler):
 HTTPServer(('127.0.0.1', PORT), H).serve_forever()
 PYEOF
 
-  python3 /tmp/_retry_proxy.py "${PI_AZURE_BASE_URL}/v1" "${PI_AZURE_API_KEY}" "${RETRY_PROXY_PORT}" \
+  # For openai-completions (e.g. Google Gemini), proxy path is different
+  if [[ "${PI_WIRE_API}" == "openai-completions" ]]; then
+    PROXY_UPSTREAM="${PI_AZURE_BASE_URL}"
+  else
+    PROXY_UPSTREAM="${PI_AZURE_BASE_URL}/v1"
+  fi
+
+  python3 /tmp/_retry_proxy.py "${PROXY_UPSTREAM}" "${PI_AZURE_API_KEY}" "${RETRY_PROXY_PORT}" \
     > "${LOGS_DIR}/retry_proxy.log" 2>&1 &
   RETRY_PROXY_PID=$!
   for _i in $(seq 1 20); do
@@ -143,13 +155,13 @@ PYEOF
     sleep 0.2
   done
 
-  PROVIDER_NAME="azure-direct"
+  PROVIDER_NAME="direct-route"
   cat > "${PI_CONFIG_DIR}/models.json" << EOF
 {
   "providers": {
     "${PROVIDER_NAME}": {
       "baseUrl": "http://127.0.0.1:${RETRY_PROXY_PORT}",
-      "api": "openai-responses",
+      "api": "${PI_WIRE_API}",
       "apiKey": "local",
       "models": [
         { "id": "${PI_MODEL}", "name": "${PI_MODEL}", "contextWindow": ${PI_CONTEXT_WINDOW} }
@@ -158,7 +170,7 @@ PYEOF
   }
 }
 EOF
-  echo "Using Pi via retry proxy -> Azure: ${PI_AZURE_BASE_URL}" >&2
+  echo "Using Pi via retry proxy -> ${PI_AZURE_BASE_URL} (api=${PI_WIRE_API})" >&2
 
 else
   : "${PI_API_KEY:?missing PI_API_KEY}"

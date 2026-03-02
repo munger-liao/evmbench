@@ -43,7 +43,7 @@ PI_RUNNER_SH = RUNNER_DIR / 'run_pi_detect.sh'
 
 # Models that should use Pi agent instead of Codex
 # Codex has compatibility issues with non-OpenAI models
-PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview', 'gpt-5.3-codex'}
+PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview', 'gpt-5.3-codex', 'gemini-3-pro-preview'}
 
 
 def _write_codex_proxy_config(*, home: Path) -> None:
@@ -268,13 +268,22 @@ def _run_pi_detect(*, openai_token: str, key_mode: str) -> Path:
     route = model_routes.get(MODEL_KEY)
 
     if route:
-        # Direct route: Pi connects to upstream directly (e.g. Azure)
-        env['PI_AZURE_BASE_URL'] = route['base_url'].rstrip('/')
-        env['PI_AZURE_API_KEY'] = route['api_key']
-        env['PI_MODEL'] = MODEL_KEY
-        env['PI_WIRE_API'] = 'openai-responses'
-        env['PI_CONTEXT_WINDOW'] = '400000'
-        logger.info(f'Pi using direct route for {MODEL_KEY}: {route["base_url"]}')
+        provider = route.get('provider', 'openai')
+        if provider == 'google':
+            # Native Google Gemini via Pi's built-in google provider
+            env['GEMINI_API_KEY'] = route['api_key']
+            env['PI_MODEL'] = MODEL_KEY
+            env['PI_PROVIDER'] = 'google'
+            env['PI_CONTEXT_WINDOW'] = route.get('context_window', '1000000')
+            logger.info(f'Pi using native Google provider for {MODEL_KEY}')
+        else:
+            # OpenAI-compatible direct route (e.g. Azure)
+            env['PI_AZURE_BASE_URL'] = route['base_url'].rstrip('/')
+            env['PI_AZURE_API_KEY'] = route['api_key']
+            env['PI_MODEL'] = MODEL_KEY
+            env['PI_WIRE_API'] = route.get('wire_api', 'openai-responses')
+            env['PI_CONTEXT_WINDOW'] = route.get('context_window', '400000')
+            logger.info(f'Pi using direct route for {MODEL_KEY}: {route["base_url"]} (api={env["PI_WIRE_API"]})')
     else:
         # Default: go through oai_proxy
         base_url = OAI_PROXY_BASE_URL.rstrip('/')

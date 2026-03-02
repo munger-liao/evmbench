@@ -289,6 +289,7 @@ export default function Page() {
                       <SelectItem value="gpt-5.2">GPT-5.2</SelectItem>
                       <SelectItem value="gpt-5.3-codex">GPT-5.3 Codex</SelectItem>
                       <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
+                      <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -352,6 +353,11 @@ export default function Page() {
                             <span className="shrink-0 text-muted-foreground/70">
                               {job.model ?? "—"}
                             </span>
+                            {job.vuln_count != null && (
+                              <span className="shrink-0 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-destructive">
+                                {job.vuln_count}
+                              </span>
+                            )}
                             <span className="shrink-0 text-muted-foreground">
                               {new Date(job.created_at_ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
