@@ -6,6 +6,7 @@ export interface RecentJob {
   created_at_ms: number
   source?: JobSource
   model?: string
+  vuln_count?: number
 }
 
 const STORAGE_KEY = "evmbench.recentJobs.v1"
@@ -29,7 +30,8 @@ function safeParseRecentJobs(raw: string | null): RecentJob[] {
         continue
       const source = obj.source === "github" ? "github" : obj.source === "files" ? "files" : undefined
       const model = typeof obj.model === "string" ? obj.model : undefined
-      jobs.push({ job_id, label, created_at_ms, source, model })
+      const vuln_count = typeof obj.vuln_count === "number" ? obj.vuln_count : undefined
+      jobs.push({ job_id, label, created_at_ms, source, model, vuln_count })
     }
     return jobs
   } catch {

@@ -97,6 +97,7 @@ export default function ResultsClient() {
       label: job.file_name?.replace(/\.zip$/, "") ?? "run",
       created_at_ms: Date.now(),
       model: job.model,
+      vuln_count: job.result?.vulnerabilities?.length,
     })
   }, [jobId, job])
 
@@ -391,6 +392,7 @@ export default function ResultsClient() {
         job={job}
         isLoading={isLoadingJob}
         error={jobError}
+        vulnerabilityCount={vulnerabilities.length}
         onTogglePublic={handleTogglePublic}
         isUpdatingPublic={isUpdatingPublic}
         shareError={shareError}

@@ -40,6 +40,7 @@ interface ResultsHeaderProps {
   job: JobResponse | null
   isLoading: boolean
   error: string | null
+  vulnerabilityCount?: number
   onTogglePublic?: () => void
   isUpdatingPublic?: boolean
   shareError?: string | null
@@ -50,10 +51,12 @@ function JobDetailsContent({
   jobId,
   job,
   statusError,
+  vulnerabilityCount,
 }: {
   jobId: string
   job: JobResponse | null
   statusError: string | null
+  vulnerabilityCount?: number
 }) {
   return (
     <div className="min-w-0 space-y-3">
@@ -66,6 +69,12 @@ function JobDetailsContent({
       <div className="grid grid-cols-[80px_1fr] gap-y-1.5 text-xs">
         <span className="text-muted-foreground">Status</span>
         <JobStatusBadge status={job?.status} pulse={isJobActive(job?.status)} />
+        {vulnerabilityCount != null && (
+          <>
+            <span className="text-muted-foreground">Vulns</span>
+            <span className="tabular-nums">{vulnerabilityCount}</span>
+          </>
+        )}
         {job?.queue_position != null && (
           <>
             <span className="text-muted-foreground">Queue</span>
@@ -191,6 +200,7 @@ export function ResultsHeader({
   job,
   isLoading,
   error,
+  vulnerabilityCount,
   onTogglePublic,
   isUpdatingPublic = false,
   shareError,
@@ -222,6 +232,11 @@ export function ResultsHeader({
       <span className="max-w-28 truncate text-muted-foreground">
         {job?.file_name?.replace(/\.zip$/, "") ?? "Loading…"}
       </span>
+      {vulnerabilityCount != null && vulnerabilityCount > 0 && (
+        <span className="shrink-0 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-destructive">
+          {vulnerabilityCount}
+        </span>
+      )}
       {isLoading && (
         <span className="animate-spin text-muted-foreground/50">↻</span>
       )}
@@ -257,6 +272,7 @@ export function ResultsHeader({
                   jobId={jobId}
                   job={job}
                   statusError={statusError}
+                  vulnerabilityCount={vulnerabilityCount}
                 />
                 {job && onTogglePublic && (
                   <>
@@ -293,6 +309,7 @@ export function ResultsHeader({
                   jobId={jobId}
                   job={job}
                   statusError={statusError}
+                  vulnerabilityCount={vulnerabilityCount}
                 />
               </PopoverContent>
             </Popover>
