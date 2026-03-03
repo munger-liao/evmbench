@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react"
 import { type AuthUser, fetchMe } from "@/lib/auth"
-import { type FrontendConfig, fetchFrontendConfig } from "@/lib/integration"
+import {
+  type FrontendConfig,
+  type ModelOption,
+  fetchFrontendConfig,
+} from "@/lib/integration"
 
 const FRONTEND_CONFIG_TTL_MS = 10000
 const DEFAULT_FRONTEND_CONFIG: FrontendConfig = {
   // OSS-friendly default: if the backend config can't be fetched, don't gate usage on auth.
   auth_enabled: false,
   key_predefined: false,
+  models: [],
 }
 let frontendConfigCache: { value: FrontendConfig; timestamp: number } | null =
   null
@@ -85,6 +90,11 @@ export function useAuth() {
       ? frontendConfigCache.value.key_predefined
       : DEFAULT_FRONTEND_CONFIG.key_predefined,
   )
+  const [models, setModels] = useState<ModelOption[]>(
+    frontendConfigCache
+      ? frontendConfigCache.value.models
+      : DEFAULT_FRONTEND_CONFIG.models,
+  )
 
   useEffect(() => {
     let isMounted = true
@@ -95,6 +105,7 @@ export function useAuth() {
         if (isMounted) {
           setIsAuthEnabled(config.auth_enabled)
           setKeyPredefined(config.key_predefined)
+          setModels(config.models ?? [])
           setIsConfigLoading(false)
         }
 
@@ -136,6 +147,7 @@ export function useAuth() {
     isConfigLoading,
     isAuthEnabled,
     keyPredefined,
+    models,
     isAuthorized: !isAuthEnabled || Boolean(user),
   }
 }

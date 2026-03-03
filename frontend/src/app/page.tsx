@@ -4,7 +4,7 @@ import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { AppFooter } from "@/components/app-footer"
 import { AppHeader } from "@/components/app-header"
 import { FileUploader } from "@/components/file-uploader"
@@ -49,7 +49,7 @@ export default function Page() {
     clearUpload,
   } = useUploadStore()
   const [openaiKey, setOpenaiKey] = useSessionStorage("evmbench.openaiKey", "")
-  const [model, setModel] = useState("gpt-5.2")
+  const [model, setModel] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [recentJobs, setRecentJobs] = useLocalStorage<RecentJob[]>(
@@ -61,7 +61,25 @@ export default function Page() {
     isLoading: isAuthLoading,
     isConfigLoading,
     keyPredefined,
+    models: remoteModels,
   } = useAuth()
+
+  const FALLBACK_MODELS = useMemo(() => [
+    { value: "claude-opus-4-6", label: "Claude Opus 4.6" },
+    { value: "gpt-5.2", label: "GPT-5.2" },
+    { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash" },
+    { value: "gemini-3-pro-preview", label: "Gemini 3 Pro" },
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
+  ], [])
+  const models = remoteModels.length > 0 ? remoteModels : FALLBACK_MODELS
+
+  // Default to first model once the list loads
+  useEffect(() => {
+    if (!model && models.length > 0) {
+      setModel(models[0].value)
+    }
+  }, [model, models])
 
   const fileCount = files?.length ?? 0
   const selectedLabel = useMemo(() => {
@@ -280,16 +298,14 @@ export default function Page() {
                   >
                     Model
                   </Label>
-                  <Select value={model} onValueChange={setModel}>
+                  <Select value={model || undefined} onValueChange={setModel}>
                     <SelectTrigger id="model-select" className="w-full">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="claude-opus-4-6">Claude Opus 4.6</SelectItem>
-                      <SelectItem value="gpt-5.2">GPT-5.2</SelectItem>
-                      <SelectItem value="gpt-5.3-codex">GPT-5.3 Codex</SelectItem>
-                      <SelectItem value="gemini-3-flash-preview">Gemini 3 Flash</SelectItem>
-                      <SelectItem value="gemini-3-pro-preview">Gemini 3 Pro</SelectItem>
+                      {models.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -41,9 +41,8 @@ MODEL_MAP_PATH = RUNNER_DIR / 'model_map.json'
 CODEX_RUNNER_SH = RUNNER_DIR / 'run_codex_detect.sh'
 PI_RUNNER_SH = RUNNER_DIR / 'run_pi_detect.sh'
 
-# Models that should use Pi agent instead of Codex
-# Codex has compatibility issues with non-OpenAI models
-PI_AGENT_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview', 'gpt-5.3-codex', 'gemini-3-pro-preview'}
+# Base set of models that use Pi agent instead of Codex
+_BASE_PI_MODELS = {'claude-opus-4-6', 'gemini-3-flash-preview', 'gpt-5.3-codex', 'gemini-3-pro-preview'}
 
 
 def _write_codex_proxy_config(*, home: Path) -> None:
@@ -243,6 +242,10 @@ def _load_model_routes() -> dict[str, dict[str, str]]:
     except (json.JSONDecodeError, TypeError):
         pass
     return {}
+
+
+# Models configured in MODEL_ROUTES automatically use Pi agent
+PI_AGENT_MODELS = _BASE_PI_MODELS | set(_load_model_routes().keys())
 
 
 def _run_pi_detect(*, openai_token: str, key_mode: str) -> Path:

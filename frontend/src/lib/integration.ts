@@ -1,8 +1,14 @@
 import { API_BASE } from "@/lib/api"
 
+export interface ModelOption {
+  value: string
+  label: string
+}
+
 export interface FrontendConfig {
   auth_enabled: boolean
   key_predefined: boolean
+  models: ModelOption[]
 }
 
 export async function fetchFrontendConfig(

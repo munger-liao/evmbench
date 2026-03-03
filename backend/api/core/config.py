@@ -66,6 +66,8 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_EXTRA_ORIGINS: list[str] = Field(default_factory=list)
 
+    OAI_PROXY_MODEL_ROUTES: dict[str, dict[str, str]] = Field(default_factory=dict)
+
     AUTH_BACKEND: str | None = None
     AUTH_BACKEND_ARGUMENTS: dict[str, str] = Field(default_factory=dict)
 
